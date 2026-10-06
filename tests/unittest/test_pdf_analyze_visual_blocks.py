@@ -1141,6 +1141,7 @@ def test_aio_doc_analyze_runs_sync_entrypoint_in_thread_and_forwards_arguments(
     assert actual_result is expected_result
     assert observed["kwargs"] == {
         "file_bytes": b"async-document",
+        "table_enable": True,
         "effort": "xhigh",
         "parse_mode": "ocr",
         "image_analysis": False,
@@ -1748,12 +1749,23 @@ def test_doc_analyze_flash_returns_complete_model_json_and_typed_middle_json(mon
         original_attach_visual_block_images(*args, **kwargs)  # type: ignore[arg-type]
 
     def fake_render_crops(
-        pdf_bytes, prepared_pages, start_page_id, end_page_id, timeout=None, threads=None, *, session=None
-    ):
+        pdf_bytes: bytes,
+        prepared_pages: list[list[tuple[int, dict[str, object]]]],
+        start_page_id: int,
+        end_page_id: int,
+        timeout: float | None = None,
+        threads: int | None = None,
+        *,
+        session: object = None,
+    ) -> list[list[tuple[int, object]]]:
         """在当前裁图进程边界提供固定页图，保留真实编码、窗口顺序与释放断言。"""
         page_images = fake_load_images_for_window(
-            pdf_bytes, start_page_id=start_page_id, end_page_id=end_page_id,
-            image_type="pil_img", timeout=timeout, threads=threads,
+            pdf_bytes,
+            start_page_id=start_page_id,
+            end_page_id=end_page_id,
+            image_type="pil_img",
+            timeout=timeout,
+            threads=threads,
         )
         try:
             tracked_attach_visual_block_images(prepared_pages, page_images, start_page_id)

@@ -55,6 +55,7 @@ class MinerUParser(DocumentParser):
         tier: Tier = "standard",
         parse_mode: _ParseMode = "auto",
         image_analysis: bool = True,
+        table_enable: bool = True,
         vlm_config: VlmConfig | None = None,
     ) -> None:
         """保存当前解析器的 VLM 配置副本，避免其他应用或调用修改连接设置。"""
@@ -62,6 +63,10 @@ class MinerUParser(DocumentParser):
         self.effort: _Effort = effort_for_tier(tier)  # type: ignore[assignment]
         self.parse_mode: _ParseMode = parse_mode
         self.image_analysis: bool = image_analysis
+        for name, value in (("table_enable", table_enable), ("image_analysis", image_analysis)):
+            if type(value) is not bool:
+                raise ValueError(f"{name} must be a boolean")
+        self.table_enable = table_enable
         self.vlm_config = (vlm_config if vlm_config is not None else config.model.vlm).model_copy(deep=True)
 
     def parse(
@@ -117,6 +122,7 @@ class MinerUParser(DocumentParser):
             effort=self.effort,
             parse_mode=self.parse_mode,
             image_analysis=self.image_analysis,
+            table_enable=self.table_enable,
             page_index_map=prepared.retained_page_indices,
             file_suffix=prepared.file_suffix,
             source_context=prepared.source_context,
@@ -131,6 +137,7 @@ class MinerUParser(DocumentParser):
             effort=self.effort,
             parse_mode=self.parse_mode,
             image_analysis=self.image_analysis,
+            table_enable=self.table_enable,
             page_index_map=prepared.retained_page_indices,
             file_suffix=prepared.file_suffix,
             source_context=prepared.source_context,

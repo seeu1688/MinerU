@@ -22,6 +22,7 @@ ErrorType = Literal[
 _ERROR_TYPE_MAP: dict[str, ErrorType] = {
     # invalid_request_error
     "invalid_request": "invalid_request_error",
+    "parsing_option_unsupported": "invalid_request_error",
     "unsupported_output_format": "invalid_request_error",
     "unsupported_source": "invalid_request_error",
     "page_range_invalid": "invalid_request_error",

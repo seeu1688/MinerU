@@ -90,6 +90,27 @@ if failures:
 
 When throughput matters, check the service logs and `GET /v1/usage`. See [Tiers and Runtimes](tiers.md) for choosing `tier` and the [V1 HTTP API walkthrough](http_api.md) for the underlying request cycle.
 
+## Request-level parsing options
+
+An upgraded self-hosted server accepts `table_enable` and `image_analysis`. Use boolean values. Omitting either field preserves its existing default.
+
+```python
+parser = MinerUApiParser(
+    api_url="http://127.0.0.1:8000",
+    tier="advanced",
+    table_enable=False,
+    image_analysis=False,
+    include_images=True,
+)
+result = parser.parse("report.pdf")
+```
+
+`table_enable=False` skips table structure and content extraction and retains detected regions as images. It supports PDF and image inputs at basic, standard, and advanced tiers. Flash and native Office or HTML inputs return an unsupported-option error.
+
+`image_analysis=False` skips semantic interpretation of images and charts. It retains image assets and body OCR. Interpretation applies only at advanced tier. A request cannot enable it when the server has disabled it.
+
+Upgrade the server before sending these fields. See [deployment and rollback](../../next/api/parsing-options-operations.md) for the full contract and acceptance checks.
+
 ## HTTP API without the SDK
 
 The same upload → job → poll → download cycle can be driven with plain HTTP calls. The [V1 HTTP API walkthrough](http_api.md) provides a complete curl example covering upload completion, terminal states (including `partial`), resuming after a client timeout, and artifact downloads.

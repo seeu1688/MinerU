@@ -57,9 +57,13 @@ Job 状态:
 | `tier` | string 或 null | 否 | `null` | 当前服务支持的 tier 或 `null`。省略或传 `null` 表示使用默认选择策略；完整 tier 语义见 [解析 Tier](../tiers.md) 与 [ADR-0024](../decisions/0024-file-type-tier-normalization.md)。HTML 输入自动路由到 HTML 解析器。 |
 | `ocr_mode` | string | 否 | `"auto"` | 本次任务的解析模式：`auto` 自动判断、`txt` 使用文本层、`ocr` 强制 OCR。覆盖所有 tier，沿用底层 PDF/图片解析语义；其他格式使用各自的固定解析路径。非法值或 `null` 返回 HTTP 400。 |
 | `output_formats` | array | 否 | `["markdown"]` | 请求产物格式。 |
+| `table_enable` | boolean | 否 | `true` | 本分支新增。`false` 停止表格抽取并保留区域截图。仅支持 basic/standard/advanced 的 PDF 和图片。`null`、字符串、整数非法。 |
+| `image_analysis` | boolean 或 null | 否 | `null` | 本分支新增。省略/null 继承服务配置；`false` 停止图片语义分析；`true` 允许 advanced 档的现有能力。服务端禁用时显式 `true` 返回 HTTP 400。 |
 | `callback` | object | 否 | `null` | Webhook 回调配置，官方 API registered 用户可用。 |
 
 `ocr_mode` 在同一任务的文件间共用，任务之间独立。省略时固定使用 `auto`；Local Parse Server 不再通过启动参数设置全局 OCR 模式。
+
+两个新增开关也在同一任务的文件间共用。省略它们时保持原有行为。图片分析开关不控制截图保存，也不控制 ZIP 素材下载。需要离线查看表格截图时，请请求 `zip` 产物。旧服务可能拒绝新字段，客户端不会删除字段后自动重试。官方远程服务的上线状态需另行确认。部署和错误处理见[解析开关运维说明](parsing-options-operations.md)。
 
 HTML job 固定使用静态 `auto` 正文选择，不执行 JavaScript，也不下载页面引用的远程图片。URL source 的来源 URL
 会用于解析相对链接；本地 source 的相对图片仅允许位于源 HTML 的安全根目录内。

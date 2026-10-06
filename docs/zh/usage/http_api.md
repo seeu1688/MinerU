@@ -61,3 +61,23 @@ export MINERU_API_KEY=secret-key        # 匿名本地访问时省略
 - `GET /v1/usage` 报告用量。用 `/v1/health` 和 `/docs`（启用时）的 OpenAPI 文档区分服务端故障与客户端错误；重试 `failed` 任务前先查看服务端日志。
 
 V1 服务不提供旧 `/file_parse`、`/tasks` 路由；旧客户端迁移见[迁移指南](../reference/migration_4.md)。
+
+## 请求级解析开关
+
+已升级的自行部署服务接受以下任务字段：
+
+```json
+{
+  "files": [{"source": {"type": "file_id", "file_id": "file_example"}}],
+  "tier": "advanced",
+  "table_enable": false,
+  "image_analysis": false,
+  "output_formats": ["markdown", "middle_json", "zip"]
+}
+```
+
+`table_enable=false` 停止表格结构和内容抽取，保留已检测区域的截图。它仅支持 basic、standard、advanced 的 PDF 和图片。Flash 和原生 Office、HTML 等格式会返回不支持错误。
+
+`image_analysis=false` 停止图片语义分析，即模型对图片或图表的解释。它保留图片素材和正文 OCR。该功能仅在 advanced 档生效。服务禁用该功能时，请求不能重新启用。
+
+两个字段只接受 JSON 布尔值。`table_enable` 省略时为 true，null 非法。`image_analysis` 省略或 null 时继承服务配置。请求 ZIP 才能随结果下载截图。完整约束与升级步骤见[解析开关运维说明](../../next/api/parsing-options-operations.md)。

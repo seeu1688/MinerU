@@ -61,3 +61,23 @@ Downloads go through `GET /v1/files/{file_id}/content`, which may answer with a 
 - `GET /v1/usage` reports consumption. Use `/v1/health` and the OpenAPI docs at `/docs` (when enabled) to separate service-side failures from client errors; check server logs before retrying a `failed` job.
 
 The V1 service does not provide legacy `/file_parse` or `/tasks` routes; see [migration](../reference/migration_4.md) for older clients.
+
+## Request-level parsing options
+
+An upgraded self-hosted server accepts these job fields:
+
+```json
+{
+  "files": [{"source": {"type": "file_id", "file_id": "file_example"}}],
+  "tier": "advanced",
+  "table_enable": false,
+  "image_analysis": false,
+  "output_formats": ["markdown", "middle_json", "zip"]
+}
+```
+
+`table_enable=false` skips table structure and content extraction and retains detected regions as images. It supports PDF and image inputs at basic, standard, and advanced tiers. Flash and native Office or HTML inputs return an unsupported-option error.
+
+`image_analysis=false` skips semantic interpretation of images and charts. It retains image assets and body OCR. Interpretation applies only at advanced tier. A request cannot enable it when the server has disabled it.
+
+Both fields require JSON booleans. Omitted `table_enable` defaults to true; null is invalid. Omitted or null `image_analysis` inherits the server setting. Request ZIP to download image assets with the result. See [deployment and rollback](../../next/api/parsing-options-operations.md) for the full contract.

@@ -298,7 +298,7 @@ def test_async_cancellation_releases_owned_window(monkeypatch: pytest.MonkeyPatc
         state = _state(page, cache)
         del owner
         monkeypatch.setattr(window, "_prepare_locked_window", lambda *_args, **_kwargs: state)
-        monkeypatch.setattr(window, "_inference_options", lambda *_args: {})
+        monkeypatch.setattr(window, "_inference_options", lambda *_args, **_kwargs: {})
         monkeypatch.setattr(window, "get_document_render_session", lambda *_args: None)
         monkeypatch.setattr(window, "trim_process_heap", lambda: None)
 

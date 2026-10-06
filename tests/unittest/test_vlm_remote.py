@@ -32,6 +32,7 @@ class _OpenAIServer:
     models: list[str] = field(default_factory=lambda: ["test-model"])
     api_key: str = "test-key"
     chat_status: int = 200
+    layout_response: str = "<|box_start|>50 50 950 250<|box_end|><|ref_start|>text<|ref_end|>"
     requests: list[tuple[str, str, dict[str, Any] | None]] = field(default_factory=list)
 
 
@@ -94,7 +95,7 @@ def openai_server(monkeypatch: pytest.MonkeyPatch) -> Iterator[_OpenAIServer]:
                 return
             content = "Remote VLM text"
             if "Layout Detection:" in json.dumps(body["messages"]):
-                content = "<|box_start|>50 50 950 250<|box_end|><|ref_start|>text<|ref_end|>"
+                content = state.layout_response
             self._respond(200, {"choices": [{"message": {"role": "assistant", "content": content}, "finish_reason": "stop"}]})
 
     server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
@@ -254,6 +255,7 @@ def hybrid_stub(monkeypatch: pytest.MonkeyPatch) -> None:
         page_vector_geometries: object,
         np_images: object,
         page_snapshots: object = None,
+        table_enable: bool = True,
     ) -> list[list[dict[str, Any]]]:
         """保留远程正文并模拟 Hybrid 提供的行框，满足 PDF 文本块校验合同。"""
         for page in blocks:
@@ -274,6 +276,42 @@ def _pdf_input(tmp_path: Path) -> Path:
     document.drawString(20, 160, "Source text")
     document.save()
     return path
+
+
+@pytest.mark.parametrize("async_mode", [False, True])
+@pytest.mark.parametrize("image_analysis", [False, True])
+def test_advanced_disabled_table_through_http_vlm(
+    openai_server: _OpenAIServer,
+    hybrid_stub: None,
+    tmp_path: Path,
+    async_mode: bool,
+    image_analysis: bool,
+) -> None:
+    """真实 HTTP 推理链路关闭表格后保留裁图，且不解释表格内部图片。"""
+    openai_server.layout_response = (
+        "<|box_start|>100 100 800 600<|box_end|><|ref_start|>table<|ref_end|>"
+        "<|box_start|>200 200 500 400<|box_end|><|ref_start|>image<|ref_end|>"
+        "<|box_start|>100 700 900 900<|box_end|><|ref_start|>text<|ref_end|>"
+    )
+    options = {
+        "tier": "advanced",
+        "ocr_mode": "ocr",
+        "table_enable": False,
+        "image_analysis": image_analysis,
+        "vlm_config": _settings(openai_server),
+    }
+    source = _pdf_input(tmp_path)
+    result = asyncio.run(parse_async(source, **options)) if async_mode else parse(source, **options)
+    assert result._model_output is not None
+    blocks = result._model_output.pages[0]
+    assert [block["type"] for block in blocks] == ["image", "text"]
+    assert blocks[0]["content"] == ""
+    assert blocks[0]["image_base64"]
+    assert "Remote VLM text" in result.markdown()
+    predictions = [body for _, _, body in openai_server.requests if body is not None]
+    assert len(predictions) == 2  # 一次布局检测，一次外部正文抽取。
+    assert "Layout Detection:" in json.dumps(predictions[0]["messages"])
+    assert "Text Recognition:" in json.dumps(predictions[1]["messages"])
 
 
 @pytest.mark.parametrize("async_mode", [False, True])

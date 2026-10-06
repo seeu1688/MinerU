@@ -38,7 +38,7 @@ from fastapi import APIRouter, Body, Depends, FastAPI, HTTPException, Path, Quer
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, StrictBool
 from starlette.datastructures import State
 
 from ..config import VlmConfig
@@ -474,6 +474,14 @@ class CreateJobRequest(BaseModel):
     model_config = _PYDANTIC_CONFIG
     files: list[JobFileEntry] = Field(min_length=1, max_length=_MAX_FILES_PER_JOB_DEFAULT)
     tier: Tier | None = None
+    table_enable: StrictBool = Field(
+        default=True,
+        description="Extract tables. False retains detected regions as images; supported for quality-tier PDF/image inputs.",
+    )
+    image_analysis: StrictBool | None = Field(
+        default=None,
+        description="Interpret images at advanced tier. Null inherits the server setting; server disablement takes precedence.",
+    )
     ocr_mode: Literal["auto", "txt", "ocr"] = Field(
         default="auto", description="OCR mode for this parse job: auto-detect, native text, or forced OCR."
     )
@@ -1469,6 +1477,14 @@ async def _run_job(
 
                 page_range = entry.page_range or ""
                 effective_tier = batch_effective_parse_tier(rec.tier, suffix)
+                logger.info(
+                    "Parse options: job_id=%s file_index=%s tier=%s table_enable=%s image_analysis=%s",
+                    rec.id,
+                    i,
+                    effective_tier,
+                    req.table_enable,
+                    image_analysis and effective_tier == "advanced",
+                )
 
                 source_context = None
                 if stype == "html":
@@ -1484,6 +1500,7 @@ async def _run_job(
                     tier=effective_tier,
                     ocr_mode=req.ocr_mode,
                     image_analysis=image_analysis,
+                    table_enable=req.table_enable,
                     page_range=page_range,
                     source_context=source_context,
                     vlm_config=vlm_config,
@@ -1964,6 +1981,27 @@ async def create_job(
 
     if job_store._closing:
         _raise_api_error(503, error_type="engine_error", code="server_shutting_down", message="Server is shutting down")
+    if body.image_analysis is True and not request.app.state.image_analysis:
+        _raise_api_error(
+            400,
+            error_type="invalid_request_error",
+            code="invalid_request",
+            message="Image analysis is disabled by this server",
+            param="image_analysis",
+        )
+    if not body.table_enable:
+        for entry in body.files:
+            if isinstance(entry.source, UrlSource):
+                continue  # Downloaded content determines the actual file type.
+            name = _source_name(entry.source, file_store)
+            if body.tier == "flash" or is_flash_only_parse_extension(name):
+                _raise_api_error(
+                    400,
+                    error_type="invalid_request_error",
+                    code="parsing_option_unsupported",
+                    message=f"table_enable=False is not supported for {name!r} with tier {body.tier!r}",
+                    param="table_enable",
+                )
     rec = job_store.create(body, file_store)
     url_timeout_val: int = request.app.state.url_timeout
     allow_local_source_val: bool = request.app.state.allow_local_source
@@ -1971,7 +2009,7 @@ async def create_job(
     allow_http_source_val: bool = request.app.state.allow_http_source
     max_url_bytes_val: int = request.app.state.max_url_bytes
     flash_enabled_val: bool = request.app.state.flash_enabled
-    image_analysis_val: bool = request.app.state.image_analysis
+    image_analysis_val: bool = request.app.state.image_analysis if body.image_analysis is None else body.image_analysis
     vlm_config_val: VlmConfig = request.app.state.vlm_config
 
     async def _bg_run() -> None:

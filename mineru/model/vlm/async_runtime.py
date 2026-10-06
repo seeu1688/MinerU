@@ -221,6 +221,18 @@ class AsyncVlmPredictor:
         """异步入口直接等待原生异步外部布局抽取。"""
         return await self._acall(lambda: self._extract_with_layout(images, blocks_list, not_extract_list, image_analysis))
 
+    async def _layout_detect(self, images: list[Image]) -> list[ExtractResult]:
+        """在所属事件循环中检测布局，并复用模型的并发额度。"""
+        return await self._predictor.aio_batch_layout_detect(images, semaphore=self._semaphore)
+
+    def batch_layout_detect(self, images: list[Image]) -> list[ExtractResult]:
+        """同步等待所属事件循环的布局检测。"""
+        return self._call(lambda: self._layout_detect(images))
+
+    async def aio_batch_layout_detect(self, images: list[Image]) -> list[ExtractResult]:
+        """异步等待布局检测，保留任务取消和模型资源归属规则。"""
+        return await self._acall(lambda: self._layout_detect(images))
+
     async def _two_step(
         self,
         images: list[Image],

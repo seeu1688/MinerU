@@ -13,6 +13,14 @@ if TYPE_CHECKING:
 class VlmPredictor(Protocol):
     """同步客户端与原生异步代理共同实现的最小文档抽取接口。"""
 
+    def batch_layout_detect(self, images: list[Image]) -> list[ExtractResult]:
+        """Detect regions without extracting their contents."""
+        ...
+
+    async def aio_batch_layout_detect(self, images: list[Image]) -> list[ExtractResult]:
+        """Detect regions using the shared asynchronous runtime."""
+        ...
+
     def batch_extract_with_layout(
         self,
         images: list[Image],

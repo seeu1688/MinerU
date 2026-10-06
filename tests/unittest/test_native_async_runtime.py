@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import threading
 from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
 from typing import Any
 
 import pytest
@@ -52,6 +53,10 @@ class _AsyncClient:
         """两阶段入口复用同一引擎和请求额度。"""
         return await self.aio_batch_extract_with_layout(images, [], **kwargs)
 
+    async def aio_batch_layout_detect(self, images: list[Any], **kwargs: Any) -> list[Any]:
+        """布局检测也必须使用相同的循环和并发额度。"""
+        return await self.aio_batch_extract_with_layout(images, [], **kwargs)
+
     def batch_extract_with_layout(self, *args: Any, **kwargs: Any) -> None:
         """一旦误用同步推理立即失败。"""
         raise AssertionError("Synchronous inference must not run")
@@ -82,6 +87,20 @@ def test_sync_async_and_different_loops_share_engine_and_limit(native_runtime: A
         if index % 2:
             return asyncio.run(native_runtime.aio_batch_two_step_extract([index]))
         return native_runtime.batch_extract_with_layout([index], [[]])
+
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        assert list(executor.map(invoke, range(8))) == [[i] for i in range(8)]
+    assert native_runtime._predictor.peak == 2
+    assert native_runtime._predictor.active == 0
+
+
+def test_layout_detection_shares_runtime_limit(native_runtime: AsyncVlmPredictor) -> None:
+    """新增布局入口不能绕过共享循环或并发限制。"""
+
+    def invoke(index: int) -> list[Any]:
+        if index % 2:
+            return asyncio.run(native_runtime.aio_batch_layout_detect([index]))
+        return native_runtime.batch_layout_detect([index])
 
     with ThreadPoolExecutor(max_workers=8) as executor:
         assert list(executor.map(invoke, range(8))) == [[i] for i in range(8)]
@@ -322,7 +341,7 @@ def test_real_model_factory_constructs_async_llm_on_owner_loop(monkeypatch: pyte
         predictor = manager.get_model("vllm-engine", "/mock/model", None)
         assert predictor.batch_two_step_extract([1]) == [1]
         assert events[0][0:2] == ("load", "mineru-vllm-async-engine")
-        assert events[0][3]["model"] == "/mock/model"
+        assert Path(events[0][3]["model"]).resolve() == Path("/mock/model").resolve()
         assert manager.get_model("vllm-async-engine", "/mock/model", None) is predictor
     finally:
         manager.shutdown()

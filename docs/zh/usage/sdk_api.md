@@ -90,6 +90,27 @@ if failures:
 
 关注吞吐时检查服务日志和 `GET /v1/usage`。档位选择见[档位与运行环境](tiers.md)，底层请求周期见 [V1 HTTP API 完整示例](http_api.md)。
 
+## 请求级解析开关
+
+已升级的自行部署服务支持 `table_enable` 和 `image_analysis`。两个参数使用布尔值。省略参数时继承原有行为。
+
+```python
+parser = MinerUApiParser(
+    api_url="http://127.0.0.1:8000",
+    tier="advanced",
+    table_enable=False,
+    image_analysis=False,
+    include_images=True,
+)
+result = parser.parse("report.pdf")
+```
+
+`table_enable=False` 停止表格结构和内容抽取。已检测表格保留为截图。它只支持 basic、standard、advanced 的 PDF 和图片。Flash 和原生 Office 等格式会返回错误。
+
+`image_analysis=False` 停止图片语义分析，即模型对图片或图表内容的解释。它保留图片素材和正文 OCR。图片语义分析仅在 advanced 档生效。服务禁用该功能时，请求不能重新启用。
+
+请先升级服务端，再使用新参数。完整部署、验收和回滚步骤见[解析开关运维说明](../../next/api/parsing-options-operations.md)。
+
 ## 不使用 SDK 的 HTTP 调用
 
 上传 → 任务 → 轮询 → 下载的闭环也可以直接用 HTTP 调用完成。[V1 HTTP API 完整示例](http_api.md) 提供了完整的 curl 示例，覆盖完成上传、终态处理（含 `partial`）、客户端超时后继续轮询和产物下载。

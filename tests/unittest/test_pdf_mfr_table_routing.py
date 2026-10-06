@@ -68,6 +68,39 @@ def test_invalid_table_bbox_does_not_remove_formulas(bbox: Any) -> None:
 
 @pytest.mark.parametrize("effort", ["medium", "high", "xhigh"])
 @pytest.mark.parametrize("parse_mode", ["txt", "ocr"])
+def test_disabled_table_skips_local_recognition_and_owned_formulas(
+    monkeypatch: pytest.MonkeyPatch, effort: str, parse_mode: str
+) -> None:
+    layout = [[_formula([20, 20, 30, 30]), _formula([1, 1, 5, 5])]]
+    blocks = [[{"type": "table", "bbox": [0.1, 0.1, 0.9, 0.9]}]]
+    mfr = MagicMock(side_effect=lambda inputs, *_args, **_kwargs: deepcopy(inputs))
+    context = SimpleNamespace(mfr_model=SimpleNamespace(batch_predict=mfr))
+    table_recognition = MagicMock(side_effect=AssertionError("disabled table reached recognizer"))
+    monkeypatch.setattr(window, "_apply_medium_table_recognition", table_recognition)
+    monkeypatch.setattr(window, "_ocr_det", MagicMock(return_value=[[]]))
+    monkeypatch.setattr(window, "_fill_window_block_content_and_lines", MagicMock(return_value=blocks))
+    for name in ("_apply_medium_display_formula_results", "_apply_medium_formula_number_ocr", "_apply_ocr_rec_results"):
+        monkeypatch.setattr(window, name, MagicMock())
+    with Image.new("RGB", (100, 100)) as image:
+        window._process_text_and_formulas(
+            [{"img_pil": image, "scale": 1.0}],
+            [MagicMock()],
+            blocks,
+            parse_mode,
+            effort,
+            context,
+            layout,
+            table_enable=False,
+        )
+    table_recognition.assert_not_called()
+    if effort == "medium" or parse_mode == "txt":
+        assert mfr.call_args.args[0] == [[layout[0][1]]]
+    else:
+        mfr.assert_not_called()
+
+
+@pytest.mark.parametrize("effort", ["medium", "high", "xhigh"])
+@pytest.mark.parametrize("parse_mode", ["txt", "ocr"])
 @pytest.mark.parametrize("content", ["", "<table><tr><td>recognized</td></tr></table>"])
 def test_window_mfr_routing_and_original_ocr_masks(
     monkeypatch: pytest.MonkeyPatch,

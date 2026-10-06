@@ -507,10 +507,12 @@ def test_high_txt_window_excludes_native_table_from_vlm(
         *,
         page_vector_geometries: object,
         np_images: object,
+        table_enable: bool,
     ) -> list[list[dict[str, object]]]:
         """跳过与本测试无关的正文和公式回填。"""
 
         assert isinstance(_page_text_geometries, list)
+        assert table_enable is True
         assert _page_text_geometries[0] is cached_geometry
         return model_list
 
