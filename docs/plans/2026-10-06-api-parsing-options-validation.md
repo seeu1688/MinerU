@@ -5,6 +5,7 @@
 ## 验证环境与结论
 
 - 分支：`feat/api-parsing-options`。
+- 已验证代码提交：`ff811484fc8f418c2bdcb113298f0023c43b3af1`。后续补充 PR 状态只修改文档。
 - 基线：`ed50cc15bc2c9bfb00520dadfe61979866e62236`。2026-10-06 检查时，上游 master 仍是该提交。
 - 系统：Windows；Python 3.13.7；CPU；本地小模型使用 ONNX。
 - 主要依赖：DocVortex 0.5.9、mineru-vl-utils 2.0.5、pypdfium2 5.14.0、Pydantic 2.13.5。

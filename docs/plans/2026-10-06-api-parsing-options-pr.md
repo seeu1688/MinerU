@@ -2,6 +2,10 @@
 
 本次修改在解析 API 和 Python SDK 增加两个请求级开关。调用方可以停止表格结构抽取，也可以停止模型解释图片或图表。省略开关时保持原有默认行为。
 
+提交记录：代码提交 `ff811484fc8f418c2bdcb113298f0023c43b3af1`，分支已推送至 `seeu1688/MinerU`。上游草稿 PR 为 [#5620](https://github.com/opendatalab/MinerU/pull/5620)，目标分支为 master。
+
+2026-10-06 创建后，GitHub 显示无合并冲突。当前 CLA 检查要求贡献者签署许可协议，不能将该检查描述为代码测试失败。贡献者应先阅读协议，再按 [CLA 机器人提示](https://github.com/opendatalab/MinerU/pull/5620#issuecomment-6008350697)自行签署。当前未签署，也未将 PR 标记为可合并。
+
 ## 接口与行为
 
 - HTTP `table_enable` 默认为 true。false 仅支持 basic、standard、advanced 的 PDF 和图片。检测到的表格保留为区域图片；表题、表注和相邻正文保留。
