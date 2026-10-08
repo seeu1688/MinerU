@@ -41,11 +41,12 @@ def doc_analyze(
     vlm_config: VlmConfig | None = None,
     source_properties: DocumentProperties | None = None,
     table_enable: bool = True,
+    formula_enable: bool = True,
 ) -> tuple[MiddleJson, ModelJson]:
     """生产严格 ModelJson，并在统一边界构造严格 MiddleJson。"""
     configure_global_log_level()
     _validate_analyze(effort, file_suffix, page_index_map)
-    _validate_parsing_options(table_enable, image_analysis, effort, file_suffix)
+    _validate_parsing_options(table_enable, image_analysis, effort, file_suffix, formula_enable)
 
     if source_properties is None:
         source_properties = read_source_properties(file_bytes, file_suffix, source_context)
@@ -59,6 +60,7 @@ def doc_analyze(
             parse_mode=parse_mode,
             image_analysis=image_analysis,
             table_enable=table_enable,
+            **({"formula_enable": formula_enable} if formula_enable is not True else {}),
             vlm_config=vlm_config,
         )
     elif file_suffix in ("csv", "tsv"):
@@ -107,11 +109,12 @@ async def aio_doc_analyze(
     vlm_config: VlmConfig | None = None,
     source_properties: DocumentProperties | None = None,
     table_enable: bool = True,
+    formula_enable: bool = True,
 ) -> tuple[MiddleJson, ModelJson]:
     """vLLM/HTTP 的 PDF 分析使用原生异步编排，其余路径保持受控线程回退。"""
     configure_global_log_level()
     _validate_analyze(effort, file_suffix, page_index_map)
-    _validate_parsing_options(table_enable, image_analysis, effort, file_suffix)
+    _validate_parsing_options(table_enable, image_analysis, effort, file_suffix, formula_enable)
     native_async = False
     if file_suffix == "pdf" and effort in {"high", "xhigh"}:
         from ..model.vlm.client import uses_native_async_vlm
@@ -125,6 +128,7 @@ async def aio_doc_analyze(
             parse_mode=parse_mode,
             image_analysis=image_analysis,
             table_enable=table_enable,
+            **({"formula_enable": formula_enable} if formula_enable is not True else {}),
             page_index_map=page_index_map,
             file_suffix=file_suffix,
             source_context=source_context,
@@ -142,6 +146,7 @@ async def aio_doc_analyze(
         parse_mode=parse_mode,
         image_analysis=image_analysis,
         table_enable=table_enable,
+        **({"formula_enable": formula_enable} if formula_enable is not True else {}),
         vlm_config=vlm_config,
     )
     model_json = await run_sync(_build_model_json, result, file_suffix, page_index_map, source_properties)
@@ -149,9 +154,11 @@ async def aio_doc_analyze(
     return middle_json, model_json
 
 
-def _validate_parsing_options(table_enable: bool, image_analysis: bool, effort: AnalyzeEffort, file_suffix: FileSuffix) -> None:
+def _validate_parsing_options(
+    table_enable: bool, image_analysis: bool, effort: AnalyzeEffort, file_suffix: FileSuffix, formula_enable: bool = True
+) -> None:
     """校验开关类型和支持路径，拒绝不能落实关闭语义的请求。"""
-    for name, value in (("table_enable", table_enable), ("image_analysis", image_analysis)):
+    for name, value in (("table_enable", table_enable), ("image_analysis", image_analysis), ("formula_enable", formula_enable)):
         if type(value) is not bool:
             raise ValueError(f"{name} must be a boolean")
     if not table_enable and (file_suffix != "pdf" or effort == "flash"):
@@ -159,6 +166,13 @@ def _validate_parsing_options(table_enable: bool, image_analysis: bool, effort: 
             "parsing_option_unsupported",
             f"table_enable=False requires basic, standard or advanced PDF/image parsing; got {file_suffix}/{effort}",
             param="table_enable",
+        )
+
+    if not formula_enable and (file_suffix != "pdf" or effort == "flash"):
+        raise InvalidRequestError(
+            "parsing_option_unsupported",
+            f"formula_enable=False requires basic, standard or advanced PDF/image parsing; got {file_suffix}/{effort}",
+            param="formula_enable",
         )
 
 

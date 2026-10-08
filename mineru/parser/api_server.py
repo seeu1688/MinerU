@@ -478,6 +478,12 @@ class CreateJobRequest(BaseModel):
         default=True,
         description="Extract tables. False retains detected regions as images; supported for quality-tier PDF/image inputs.",
     )
+    formula_enable: StrictBool = Field(
+        default=True,
+        description="Recognize formulas with dedicated models. False preserves standalone formulas as images; "
+        "inline formulas use ordinary text extraction. Quality-tier PDF/image inputs only. "
+        "Table/image interpretation remains controlled by its own option.",
+    )
     image_analysis: StrictBool | None = Field(
         default=None,
         description="Interpret images at advanced tier. Null inherits the server setting; server disablement takes precedence.",
@@ -1478,11 +1484,12 @@ async def _run_job(
                 page_range = entry.page_range or ""
                 effective_tier = batch_effective_parse_tier(rec.tier, suffix)
                 logger.info(
-                    "Parse options: job_id=%s file_index=%s tier=%s table_enable=%s image_analysis=%s",
+                    "Parse options: job_id=%s file_index=%s tier=%s table_enable=%s formula_enable=%s image_analysis=%s",
                     rec.id,
                     i,
                     effective_tier,
                     req.table_enable,
+                    req.formula_enable,
                     image_analysis and effective_tier == "advanced",
                 )
 
@@ -1501,6 +1508,7 @@ async def _run_job(
                     ocr_mode=req.ocr_mode,
                     image_analysis=image_analysis,
                     table_enable=req.table_enable,
+                    **({"formula_enable": req.formula_enable} if req.formula_enable is not True else {}),
                     page_range=page_range,
                     source_context=source_context,
                     vlm_config=vlm_config,
@@ -1989,7 +1997,9 @@ async def create_job(
             message="Image analysis is disabled by this server",
             param="image_analysis",
         )
-    if not body.table_enable:
+    for option in ("table_enable", "formula_enable"):
+        if getattr(body, option):
+            continue
         for entry in body.files:
             if isinstance(entry.source, UrlSource):
                 continue  # Downloaded content determines the actual file type.
@@ -1999,8 +2009,8 @@ async def create_job(
                     400,
                     error_type="invalid_request_error",
                     code="parsing_option_unsupported",
-                    message=f"table_enable=False is not supported for {name!r} with tier {body.tier!r}",
-                    param="table_enable",
+                    message=f"{option}=False is not supported for {name!r} with tier {body.tier!r}",
+                    param=option,
                 )
     rec = job_store.create(body, file_store)
     url_timeout_val: int = request.app.state.url_timeout

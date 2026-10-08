@@ -122,6 +122,7 @@ class MinerUApiParser(DocumentParser):
 
     - ``tier`` → v1 ``tier`` (``"flash"`` / ``"basic"`` / ``"standard"`` / ``"advanced"``); ``None`` omits the field
     - ``ocr_mode`` → v1 request OCR mode; ``None`` omits the field (server default: ``"auto"``)
+    - ``formula_enable`` → dedicated formula recognition; ``None`` omits the field
     - ``table_enable`` → table extraction; ``None`` omits the field, ``False`` preserves detected table regions as images
     - ``image_analysis`` → image interpretation; ``None`` inherits the server default, ``False`` keeps image assets
     - ``page_range`` → per-file v1 ``page_range``
@@ -137,6 +138,7 @@ class MinerUApiParser(DocumentParser):
         tier: Tier | None = None,
         ocr_mode: Literal["auto", "txt", "ocr"] | None = None,
         table_enable: bool | None = None,
+        formula_enable: bool | None = None,
         image_analysis: bool | None = None,
         include_images: bool = False,
         include_model_output: bool = False,
@@ -151,10 +153,15 @@ class MinerUApiParser(DocumentParser):
         self._source_features: set[str] | None = None
         self.tier = validate_tier(tier) if tier is not None else None
         self.ocr_mode = ocr_mode
-        for name, value in (("table_enable", table_enable), ("image_analysis", image_analysis)):
+        for name, value in (
+            ("table_enable", table_enable),
+            ("image_analysis", image_analysis),
+            ("formula_enable", formula_enable),
+        ):
             if value is not None and type(value) is not bool:
                 raise ValueError(f"{name} must be a boolean or None")
         self.table_enable = table_enable
+        self.formula_enable = formula_enable
         self.image_analysis = image_analysis
         self.include_images = include_images
         self.include_model_output = include_model_output
@@ -256,6 +263,8 @@ class MinerUApiParser(DocumentParser):
             payload["tier"] = self.tier
         if self.ocr_mode is not None:
             payload["ocr_mode"] = self.ocr_mode
+        if self.formula_enable is not None:
+            payload["formula_enable"] = self.formula_enable
         if self.table_enable is not None:
             payload["table_enable"] = self.table_enable
         if self.image_analysis is not None:

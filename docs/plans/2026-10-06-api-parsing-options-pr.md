@@ -1,10 +1,20 @@
 # PR 审核说明
 
+## 2026-10-08 公式迭代
+
+本次在同一 PR #5620 增加第三个请求级开关 `formula_enable`。默认 true。false 停止公式专用识别，独立公式转为截图，行内公式使用普通文字提取。支持 basic、standard、advanced 的 PDF/图片；Flash 和原生格式明确拒绝关闭。图片和表格解释仍受各自开关控制。
+
+专项测试同时检查模型不调用和最终结果转换，不只检查参数接受。实现、测试结果和未覆盖边界见[公式开关迭代与验证](2026-10-08-formula-options-validation.md)。旧版部署的 PDF 四种组合结果见[部署验收](2026-10-08-deployed-parsing-options-validation.md)，不能当作新增公式开关的部署证据。
+
+下文是首版交付记录。原 PR 当前已不是草稿；2026-10-08 更新前读取的 CLA 检查为 SUCCESS。后续提交的检查状态以 GitHub 最新结果为准。
+
+## 首版记录
+
 本次修改在解析 API 和 Python SDK 增加两个请求级开关。调用方可以停止表格结构抽取，也可以停止模型解释图片或图表。省略开关时保持原有默认行为。
 
 提交记录：代码提交 `ff811484fc8f418c2bdcb113298f0023c43b3af1`，分支已推送至 `seeu1688/MinerU`。上游草稿 PR 为 [#5620](https://github.com/opendatalab/MinerU/pull/5620)，目标分支为 master。
 
-2026-10-06 创建后，GitHub 显示无合并冲突。当前 CLA 检查要求贡献者签署许可协议，不能将该检查描述为代码测试失败。贡献者应先阅读协议，再按 [CLA 机器人提示](https://github.com/opendatalab/MinerU/pull/5620#issuecomment-6008350697)自行签署。当前未签署，也未将 PR 标记为可合并。
+2026-10-06 创建后，GitHub 显示无合并冲突。创建初期 CLA 检查曾要求贡献者签署许可协议，该失败不属于代码测试失败。2026-10-08 更新前重新读取 PR，CLA 已为 SUCCESS，PR 已不是草稿；新提交后的状态需重新检查。
 
 ## 接口与行为
 

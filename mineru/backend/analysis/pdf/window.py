@@ -34,6 +34,7 @@ from .constants import (
     NOT_EXTRACT_TYPES,
     PIPELINE_DET_TYPE,
 )
+from .formula_options import FORMULA_TYPES, formulas_to_images, retain_formula_regions
 from .formulas import (
     _apply_medium_display_formula_results,
     _apply_medium_formula_number_ocr,
@@ -218,6 +219,7 @@ def _process_text_and_formulas(
     page_snapshots: PageSnapshotCache | None = None,
     np_images: list[np.ndarray] | None = None,
     table_enable: bool = True,
+    formula_enable: bool = True,
 ) -> list[list[dict[str, Any]]]:
     """在当前窗口内完成 OCR、公式、原生文本及 block 行信息回填。"""
 
@@ -240,7 +242,9 @@ def _process_text_and_formulas(
     if np_images is None:
         np_images = [np.asarray(pil_image).copy() for pil_image in images_pil_list]
 
-    mfd_res = _build_formula_inputs(images_layout_res)
+    # 关闭时不遮罩行内公式，让原生文字或普通 OCR 读取完整句子。
+    mfr_enable = mfr_enable and formula_enable
+    mfd_res = _build_formula_inputs(images_layout_res) if formula_enable else [[] for _ in images_layout_res]
     if not table_enable:
         mfd_res = exclude_table_formulas(mfd_res, model_list, [image.size for image in images_pil_list])
     images_formula_list = mfd_res
@@ -276,18 +280,20 @@ def _process_text_and_formulas(
                     np_images,
                 )
         # 将行间公式span回填入block
-        _apply_medium_display_formula_results(
-            model_list,
-            display_formula_list,
-            images_pil_list,
-        )
-        # 使用ocr识别行间公式标号
-        with stage_timer("pdf.formula_numbers"):
-            _apply_medium_formula_number_ocr(
-                local_model_context,
+        if formula_enable:
+            _apply_medium_display_formula_results(
                 model_list,
-                np_images,
+                display_formula_list,
+                images_pil_list,
             )
+        # 使用ocr识别行间公式标号
+        if formula_enable:
+            with stage_timer("pdf.formula_numbers"):
+                _apply_medium_formula_number_ocr(
+                    local_model_context,
+                    model_list,
+                    np_images,
+                )
 
     # 行间公式标号回填到block
     for page_model_list in model_list:
@@ -370,6 +376,7 @@ def _prepare_pdf_window(
     parse_mode: Literal["txt", "ocr"],
     hybrid_model: HybridLocalModelContext,
     table_enable: bool = True,
+    formula_enable: bool = True,
 ) -> _WindowInputs:
     """渲染并准备布局、原生表格和 VLM 输入；失败时由本阶段关闭图片。"""
     images_list: list[dict[str, Any]] = []
@@ -463,6 +470,9 @@ def _prepare_pdf_window(
                     f"removed_formula_layout_items={native_table_stats['removed_formula_layout_items']}"
                 )
 
+        if not formula_enable:
+            vl_style_layout_blocks = retain_formula_regions(vl_style_layout_blocks)
+
         high_vlm_blocks = vl_style_layout_blocks
         accepted_native_tables = []
         if table_enable and parse_mode == "txt" and effort == "high":
@@ -506,6 +516,7 @@ def _finish_pdf_window(
     parse_mode: Literal["txt", "ocr"],
     hybrid_model: HybridLocalModelContext,
     table_enable: bool = True,
+    formula_enable: bool = True,
 ) -> list[list[dict[str, Any]]]:
     """按原有顺序回填推理结果、文本公式与视觉素材。"""
     images_list = state.images_list
@@ -531,6 +542,9 @@ def _finish_pdf_window(
 
     if not table_enable:
         window_model_list = retain_table_regions(window_model_list)
+
+    if not formula_enable:
+        window_model_list = retain_formula_regions(window_model_list)
 
     if effort == "flash":
         window_model_list = _process_flash_ocr(
@@ -558,6 +572,7 @@ def _finish_pdf_window(
             **({"page_snapshots": state.page_snapshots} if state.page_snapshots is not None else {}),
             np_images=np_images,
             table_enable=table_enable,
+            **({"formula_enable": formula_enable} if formula_enable is not True else {}),
         )
 
     if effort in {"medium", "high"}:
@@ -572,6 +587,8 @@ def _finish_pdf_window(
     if not table_enable:
         window_model_list = retain_table_regions(window_model_list)
         tables_to_images(window_model_list)
+    if not formula_enable:
+        formulas_to_images(window_model_list)
     with stage_timer("pdf.image_assets"):
         _attach_visual_block_images(
             window_model_list,
@@ -587,6 +604,7 @@ def _inference_options(
     parse_mode: Literal["txt", "ocr"],
     image_analysis: bool,
     table_enable: bool = True,
+    formula_enable: bool = True,
 ) -> dict[str, Any]:
     """生成同步、异步共同使用的抽取参数，保持 TXT 类型过滤与图片开关。"""
     options = {"images": state.images_pil_list, "image_analysis": image_analysis if effort == "xhigh" else False}
@@ -596,6 +614,8 @@ def _inference_options(
         options["not_extract_list"] = sorted(NOT_EXTRACT_TYPES)
     if not table_enable:
         options["not_extract_list"] = sorted(set(options.get("not_extract_list", [])) | {"table"})
+    if not formula_enable:
+        options["not_extract_list"] = sorted(set(options.get("not_extract_list", [])) | FORMULA_TYPES)
     return options
 
 
@@ -611,6 +631,7 @@ def _process_pdf_window(
     hybrid_model: HybridLocalModelContext | None,
     vlm_predictor: VlmPredictor | None,
     table_enable: bool = True,
+    formula_enable: bool = True,
 ) -> list[list[dict[str, Any]]]:
     """同步编排共享窗口阶段，在 VLM 等待期间释放本地模型执行锁。"""
     if hybrid_model is None:
@@ -625,22 +646,35 @@ def _process_pdf_window(
             parse_mode=parse_mode,
             hybrid_model=hybrid_model,
             table_enable=table_enable,
+            **({"formula_enable": formula_enable} if formula_enable is not True else {}),
         )
     try:
         result = state.vl_style_layout_blocks
         if effort in {"high", "xhigh"}:
             if vlm_predictor is None:
                 raise ValueError("VLM predictor is required for high/xhigh")
-            options = _inference_options(state, effort, parse_mode, image_analysis, table_enable=table_enable)
-            if effort == "xhigh" and not table_enable:
-                options["blocks_list"] = retain_table_regions(vlm_predictor.batch_layout_detect(state.images_pil_list))
-            if effort == "high" or not table_enable:
+            options = _inference_options(
+                state, effort, parse_mode, image_analysis, table_enable=table_enable, formula_enable=formula_enable
+            )
+            if effort == "xhigh" and (not table_enable or not formula_enable):
+                options["blocks_list"] = vlm_predictor.batch_layout_detect(state.images_pil_list)
+                if not table_enable:
+                    options["blocks_list"] = retain_table_regions(options["blocks_list"])
+                if not formula_enable:
+                    options["blocks_list"] = retain_formula_regions(options["blocks_list"])
+            if effort == "high" or not table_enable or not formula_enable:
                 result = vlm_predictor.batch_extract_with_layout(**options)
             else:
                 result = vlm_predictor.batch_two_step_extract(**options)
         with local_model_stage(hybrid_model.device):
             return _finish_pdf_window(
-                state, result, effort=effort, parse_mode=parse_mode, hybrid_model=hybrid_model, table_enable=table_enable
+                state,
+                result,
+                effort=effort,
+                parse_mode=parse_mode,
+                hybrid_model=hybrid_model,
+                table_enable=table_enable,
+                **({"formula_enable": formula_enable} if formula_enable is not True else {}),
             )
     finally:
         state.close()
@@ -656,6 +690,7 @@ def _prepare_locked_window(
     parse_mode: Literal["txt", "ocr"],
     hybrid_model: HybridLocalModelContext,
     table_enable: bool = True,
+    formula_enable: bool = True,
 ) -> _WindowInputs:
     """在线程内取得和释放本地模型锁，避免事件循环线程等待同步锁。"""
     with local_model_stage(hybrid_model.device):
@@ -668,6 +703,7 @@ def _prepare_locked_window(
             parse_mode=parse_mode,
             hybrid_model=hybrid_model,
             table_enable=table_enable,
+            **({"formula_enable": formula_enable} if formula_enable is not True else {}),
         )
 
 
@@ -679,11 +715,18 @@ def _finish_locked_window(
     parse_mode: Literal["txt", "ocr"],
     hybrid_model: HybridLocalModelContext,
     table_enable: bool = True,
+    formula_enable: bool = True,
 ) -> list[list[dict[str, Any]]]:
     """回填阶段与同步入口共用本地模型执行锁。"""
     with local_model_stage(hybrid_model.device):
         return _finish_pdf_window(
-            state, result, effort=effort, parse_mode=parse_mode, hybrid_model=hybrid_model, table_enable=table_enable
+            state,
+            result,
+            effort=effort,
+            parse_mode=parse_mode,
+            hybrid_model=hybrid_model,
+            table_enable=table_enable,
+            **({"formula_enable": formula_enable} if formula_enable is not True else {}),
         )
 
 
@@ -716,6 +759,7 @@ async def aio_process_pdf_windows(
     hybrid_model: HybridLocalModelContext,
     vlm_predictor: VlmPredictor,
     table_enable: bool = True,
+    formula_enable: bool = True,
 ) -> list[list[dict[str, Any]]]:
     """逐窗口原生异步推理；仅不同文档可交错推进，保留单文档内存上界。"""
     page_count = document.page_count
@@ -742,6 +786,7 @@ async def aio_process_pdf_windows(
                         parse_mode=parse_mode,
                         hybrid_model=hybrid_model,
                         table_enable=table_enable,
+                        **({"formula_enable": formula_enable} if formula_enable is not True else {}),
                     )
                 )
 
@@ -749,12 +794,16 @@ async def aio_process_pdf_windows(
                 await _run_window_prepare(prepare, render_session)
             finally:
                 state = holder[0] if holder else None
-            options = _inference_options(state, effort, parse_mode, image_analysis, table_enable=table_enable)
-            if effort == "xhigh" and not table_enable:
-                options["blocks_list"] = retain_table_regions(
-                    await vlm_predictor.aio_batch_layout_detect(state.images_pil_list)
-                )
-            if effort == "high" or not table_enable:
+            options = _inference_options(
+                state, effort, parse_mode, image_analysis, table_enable=table_enable, formula_enable=formula_enable
+            )
+            if effort == "xhigh" and (not table_enable or not formula_enable):
+                options["blocks_list"] = await vlm_predictor.aio_batch_layout_detect(state.images_pil_list)
+                if not table_enable:
+                    options["blocks_list"] = retain_table_regions(options["blocks_list"])
+                if not formula_enable:
+                    options["blocks_list"] = retain_formula_regions(options["blocks_list"])
+            if effort == "high" or not table_enable or not formula_enable:
                 result = await vlm_predictor.aio_batch_extract_with_layout(**options)
             else:
                 result = await vlm_predictor.aio_batch_two_step_extract(**options)
@@ -767,6 +816,7 @@ async def aio_process_pdf_windows(
                     parse_mode=parse_mode,
                     hybrid_model=hybrid_model,
                     table_enable=table_enable,
+                    **({"formula_enable": formula_enable} if formula_enable is not True else {}),
                 )
             )
         except asyncio.CancelledError:
@@ -792,6 +842,7 @@ def process_pdf_windows(
     hybrid_model: HybridLocalModelContext | None,
     vlm_predictor: VlmPredictor | None,
     table_enable: bool = True,
+    formula_enable: bool = True,
 ) -> list[list[dict[str, Any]]]:
     """按固定阶段处理全部 PDF 窗口并返回完整 model-list。"""
     page_count = document.page_count
@@ -837,6 +888,7 @@ def process_pdf_windows(
                     hybrid_model=hybrid_model,
                     vlm_predictor=vlm_predictor,
                     table_enable=table_enable,
+                    **({"formula_enable": formula_enable} if formula_enable is not True else {}),
                 )
             )
         finally:

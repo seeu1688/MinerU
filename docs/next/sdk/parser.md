@@ -57,6 +57,7 @@ from mineru.parser import MinerUParser
 | `parse_mode` | `Literal["auto","txt","ocr"]` | `"auto"` | 解析模式，对应原 SDK 的 `parse_mode`/`backend` 概念。 |
 | `image_analysis` | `bool` | `True` | 是否启用图片分析。对应原 SDK 的 `disable_image_analysis` 取反语义。 |
 | `table_enable` | `bool` | `True` | 本分支新增。False 停止表格抽取并保存区域截图。仅支持 basic/standard/advanced 的 PDF、图片；其他路径报 `parsing_option_unsupported`。 |
+| `formula_enable` | `bool` | `True` | False 停止公式专用识别。独立公式保留截图；行内公式使用普通文字提取。仅支持 basic/standard/advanced 的 PDF、图片；其他路径报 `parsing_option_unsupported`。 |
 
 `MinerUParser` 根据 `tier` / `parse_mode` / `image_analysis` 以及输入文件后缀，在内部选择具体的 PDF、EPUB 或结构化文档解析路径，不再要求调用方分别实例化不同 parser 类。
 
@@ -102,6 +103,7 @@ def parse(
     ocr_mode: Literal["auto","txt","ocr"] = "auto",
     image_analysis: bool = True,
     table_enable: bool = True,
+    formula_enable: bool = True,
     page_range: str = "",
     source_context=None,
 ) -> ParseResult: ...

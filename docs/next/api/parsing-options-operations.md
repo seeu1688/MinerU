@@ -1,12 +1,12 @@
 # 解析开关运维说明
 
-适用范围：本分支的 Local Parse Server、远程 Python SDK 和本地 Python SDK。本文不表示官方云服务已上线这些参数。验证结果见[验证报告](../../plans/2026-10-06-api-parsing-options-validation.md)。
+适用范围：本分支的 Local Parse Server、远程 Python SDK 和本地 Python SDK。本文不表示官方云服务已上线这些参数。验证结果见[首版验证报告](../../plans/2026-10-06-api-parsing-options-validation.md)和[公式迭代验证](../../plans/2026-10-08-formula-options-validation.md)。
 
 ## 改动与用途
 
-`POST /v1/parse/jobs` 增加两个任务级开关。`table_enable` 控制表格结构和内容抽取。`image_analysis` 控制图片语义分析，即由模型解释图片或图表的内容。不同请求可以使用不同开关，同一请求的所有文件共用开关。
+`POST /v1/parse/jobs` 增加三个任务级开关。`table_enable` 控制表格结构和内容抽取。`formula_enable` 控制公式专用识别。`image_analysis` 控制图片语义分析，即由模型解释图片或图表的内容。不同请求可以使用不同开关，同一请求的所有文件共用开关。
 
-省略两个字段时保持原有行为。不新增环境变量，不新增启动参数，不修改数据库结构。
+省略三个字段时保持原有行为。不新增环境变量，不新增启动参数，不修改数据库结构。
 
 ## 参数规则
 
@@ -14,8 +14,13 @@
 | --- | --- | --- |
 | `table_enable` | HTTP 省略为 true；null 非法 | 已检测表格保留区域截图。不生成表格结构和表内文本。表题、表注、相邻正文保留。 |
 | `image_analysis` | HTTP 省略或 null 继承服务配置 | 不解释图片内容。仍保存图片素材，不关闭正文 OCR。 |
+| `formula_enable` | `true` | 停止公式专用识别。独立公式保留截图；行内公式使用普通文字提取，不保证复杂公式文本准确率。 |
 
-HTTP 只接受真正的布尔值。`"false"`、`0`、`1` 都非法。远程 SDK 使用 `None` 表示省略字段。本地 SDK 两个参数只接受布尔值，默认均为 `True`。
+HTTP 只接受真正的布尔值。`"false"`、`0`、`1` 都非法。远程 SDK 使用 `None` 表示省略字段。本地 SDK 三个参数只接受布尔值，默认均为 `True`。
+
+`formula_enable=false` 与关闭表格的支持范围相同。它停止本地公式识别和视觉模型的独立公式抽取。独立公式在图片分析之后转为截图，不会因 `image_analysis=true` 再次被解释。表格模型、原有图片解释和普通文字提取仍可能输出数学表达或 LaTeX，因此该开关不保证整份产物完全没有数学表达。
+
+OCR 模式是 `auto`、`txt`、`ocr`。`auto` 在文档级选择后两者之一。三个开关不会改变这个选择。`txt` 不是禁止全部 OCR，也不会自动关闭公式、表格或 advanced 的图片解释。
 
 `table_enable=false` 仅支持 basic、standard、advanced 的 PDF 和图片。Flash 和原生 Office、HTML、CSV 等格式不支持。混合文件任务按实际文件类型判断；指定 advanced 不能将原生文件变成受支持的路径。
 
@@ -29,7 +34,7 @@ HTTP 只接受真正的布尔值。`"false"`、`0`、`1` 都非法。远程 SDK 
 2. 在隔离环境安装审核后的提交。按仓库方式使用 uv 安装 `.[dev,test]`。不要将本次开发环境的全部依赖版本当作生产锁定文件。
 3. 使用现有启动配置启动候选服务。保持原 tier、模型配置和鉴权方式。无需新增开关环境变量。
 4. 先发送不带新字段的原有请求。确认解析和产物下载保持正常。
-5. 用已上传的测试文件分别发送两个开关的四种组合。确认每个任务使用自己的配置。
+5. 用已上传的测试文件发送三个开关的八种组合。在 basic、standard、advanced 下分别覆盖 auto、txt、ocr。确认每个任务使用自己的配置。
 6. 比较 Markdown、中间 JSON 和 ZIP 内的截图。检查表题、表注、相邻正文、页码以及旋转方向。不要只看 HTTP 202。
 7. 检查 Flash、原生格式、非法类型及服务禁用冲突。确认错误可定位到字段。
 8. 先升级服务端，再升级需要新开关的客户端。旧客户端省略字段，可以继续调用新服务。
@@ -45,6 +50,7 @@ HTTP 202 只表示任务已创建。必须轮询任务至 completed、partial �
   "files": [{"source": {"type": "file_id", "file_id": "file_example"}}],
   "tier": "advanced",
   "table_enable": false,
+  "formula_enable": false,
   "image_analysis": false,
   "output_formats": ["markdown", "middle_json", "zip"]
 }
@@ -59,6 +65,7 @@ parser = MinerUApiParser(
     api_url="http://127.0.0.1:8000",
     tier="advanced",
     table_enable=False,
+    formula_enable=False,
     image_analysis=False,
     include_images=True,
 )
@@ -72,7 +79,7 @@ from mineru.parser import parse
 from mineru.parser.writer import FileBasedDataWriter
 
 def main():
-    result = parse("sample.pdf", tier="basic", table_enable=False, image_analysis=False)
+    result = parse("sample.pdf", tier="basic", table_enable=False, formula_enable=False, image_analysis=False)
     result.save(FileBasedDataWriter("output/sample"))
 
 if __name__ == "__main__":

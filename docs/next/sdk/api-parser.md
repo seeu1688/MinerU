@@ -50,6 +50,7 @@ class MinerUApiParser(DocumentParser):
         tier: str | None = None,
         ocr_mode: Literal["auto", "txt", "ocr"] | None = None,
         table_enable: bool | None = None,
+        formula_enable: bool | None = None,
         image_analysis: bool | None = None,
         include_images: bool = False,
         include_model_output: bool = False,
@@ -58,7 +59,7 @@ class MinerUApiParser(DocumentParser):
 
 字段:
 
-本分支新增 `table_enable` 和 `image_analysis`。`None` 表示不发送字段。显式 `False` 会发送给服务端。两者均拒绝字符串和整数。表格关闭仅支持 basic/standard/advanced 的 PDF、图片；关闭后保留截图。图片分析关闭不影响素材保存。要下载截图，请同时指定 `include_images=True`。旧服务不支持新字段时会报错，不自动回退。详见[运维说明](../api/parsing-options-operations.md)。
+本分支新增 `table_enable`、`formula_enable` 和 `image_analysis`。`None` 表示不发送字段。显式 `False` 会发送给服务端。三个参数均拒绝字符串和整数。表格和公式关闭仅支持 basic/standard/advanced 的 PDF、图片。关闭公式专用识别后，独立公式保留截图，行内公式使用普通文字提取；表格和图片解释仍由各自开关控制。图片分析关闭不影响素材保存。要下载截图，请同时指定 `include_images=True`。旧服务不支持新字段时会报错，不自动回退。详见[运维说明](../api/parsing-options-operations.md)。
 
 | 参数 | 说明 |
 |------|------|

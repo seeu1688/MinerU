@@ -32,6 +32,7 @@ def parse(
     ocr_mode: Literal["auto", "txt", "ocr"] = "auto",
     image_analysis: bool = True,
     table_enable: bool = True,
+    formula_enable: bool = True,
     page_range: str = "",
     source_context: HtmlSourceContext | None = None,
     vlm_config: VlmConfig | None = None,
@@ -39,7 +40,12 @@ def parse(
     """同步解析文档；source_context 仅供保留 HTML 原始来源的内部调用方使用。"""
     configure_global_log_level()
     parser = MinerUParser(
-        tier=tier, parse_mode=ocr_mode, image_analysis=image_analysis, table_enable=table_enable, vlm_config=vlm_config
+        tier=tier,
+        parse_mode=ocr_mode,
+        image_analysis=image_analysis,
+        table_enable=table_enable,
+        vlm_config=vlm_config,
+        **({"formula_enable": formula_enable} if formula_enable is not True else {}),
     )
     return parser.parse(path, page_range=page_range, source_context=source_context)
 
@@ -51,6 +57,7 @@ async def parse_async(
     ocr_mode: Literal["auto", "txt", "ocr"] = "auto",
     image_analysis: bool = True,
     table_enable: bool = True,
+    formula_enable: bool = True,
     page_range: str = "",
     source_context: HtmlSourceContext | None = None,
     vlm_config: VlmConfig | None = None,
@@ -58,6 +65,11 @@ async def parse_async(
     """异步解析文档；source_context 仅供保留 HTML 原始来源的内部调用方使用。"""
     configure_global_log_level()
     parser = MinerUParser(
-        tier=tier, parse_mode=ocr_mode, image_analysis=image_analysis, table_enable=table_enable, vlm_config=vlm_config
+        tier=tier,
+        parse_mode=ocr_mode,
+        image_analysis=image_analysis,
+        table_enable=table_enable,
+        vlm_config=vlm_config,
+        **({"formula_enable": formula_enable} if formula_enable is not True else {}),
     )
     return await parser.parse_async(path, page_range=page_range, source_context=source_context)

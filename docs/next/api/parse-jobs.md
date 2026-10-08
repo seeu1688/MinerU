@@ -58,6 +58,7 @@ Job 状态:
 | `ocr_mode` | string | 否 | `"auto"` | 本次任务的解析模式：`auto` 自动判断、`txt` 使用文本层、`ocr` 强制 OCR。覆盖所有 tier，沿用底层 PDF/图片解析语义；其他格式使用各自的固定解析路径。非法值或 `null` 返回 HTTP 400。 |
 | `output_formats` | array | 否 | `["markdown"]` | 请求产物格式。 |
 | `table_enable` | boolean | 否 | `true` | 本分支新增。`false` 停止表格抽取并保留区域截图。仅支持 basic/standard/advanced 的 PDF 和图片。`null`、字符串、整数非法。 |
+| `formula_enable` | boolean | 否 | `true` | `false` 停止公式专用识别。独立公式保留截图；行内公式使用普通文字提取。仅支持 basic/standard/advanced 的 PDF 和图片。`null`、字符串、整数非法。表格和图片解释仍由各自开关控制。 |
 | `image_analysis` | boolean 或 null | 否 | `null` | 本分支新增。省略/null 继承服务配置；`false` 停止图片语义分析；`true` 允许 advanced 档的现有能力。服务端禁用时显式 `true` 返回 HTTP 400。 |
 | `callback` | object | 否 | `null` | Webhook 回调配置，官方 API registered 用户可用。 |
 
