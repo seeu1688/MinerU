@@ -89,6 +89,8 @@ mineru-kit api-server --tier standard --disable-image-analysis
 
 OCR 模式通过每次 `POST /v1/parse/jobs` 请求的 `ocr_mode` 设置，可选 `auto`、`txt`、`ocr`，省略时为 `auto`。启动参数 `--ocr-mode` 已移除，传入会报错；Python `create_app()` 同样不再接受该参数。
 
+`table_enable`、`formula_enable`、`image_analysis` 也是请求字段，不是启动参数。本 PR 版本的固定提交安装、各 tier 支持范围及产物验收步骤见[三个解析开关的本地部署手册](../api/parsing-options-local-deployment.md)。
+
 模型默认在首次解析时懒加载。`--preload-models` 会在 Basic 或 Standard 服务启动时提前初始化所需模型或 VLM 客户端，并在失败时让能力接口返回明确错误；Flash 没有本地模型，该参数对 Flash 无操作。Doclib managed parse-server 会自动启用模型预加载。
 
 ### 服务日志级别
